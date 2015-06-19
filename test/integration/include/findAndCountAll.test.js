@@ -181,15 +181,20 @@ describe(Support.getTestDialectTeaser('Include'), function() {
       });
     });
 
-    it('should be able to include many-to-many relation with pagination (limit+offset)',function(){
+    it('should be able to include many-to-many relation with pagination (limit+offset) and additional include',function(){
       var Project = this.sequelize.define('Project', {
         id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
         project_name: { type: DataTypes.STRING}
+      });
+      var Item = this.sequelize.define('Item', {
+        id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
+        item_name: { type: DataTypes.STRING}
       });
       var Tag = this.sequelize.define('Tag', {
         id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
         tag_name: { type: DataTypes.STRING}
       });
+      Project.hasMany(Item);
       Project.belongsToMany(Tag, { through: 'ProjectTags' });
       Tag.belongsToMany(Project, { through: 'ProjectTags' });
 
@@ -198,17 +203,28 @@ describe(Support.getTestDialectTeaser('Include'), function() {
                             Tag.create({ tag_name: 'TagB' }),
                             Project.create({ project_name: 'ProjectA' }),
                             Project.create({ project_name: 'ProjectB' }),
-                            Project.create({ project_name: 'ProjectC' })]);
+                            Project.create({ project_name: 'ProjectC' }),
+                            Item.create({ item_name: 'ItemA' }),
+                            Item.create({ item_name: 'ItemB' })]);
       }).then(function(results) {
         var tagA = results[0];
         var tagB = results[1];
         var projectA = results[2];
         var projectB = results[3];
         var projectC = results[4];
-        return Promise.all([projectA.setTags([tagA, tagB]), projectB.setTags([tagA]), projectC.setTags([tagB])]);
+        var itemA = results[5];
+        var itemB = results[6];
+        return Promise.all([projectA.setTags([tagA, tagB]),
+                            projectB.setTags([tagA]),
+                            projectC.setTags([tagB]),
+                            projectA.addItem(itemA),
+                            projectB.addItem(itemB)]);
       }).then(function(){
         return Project.findAndCountAll({
-          include: [ { model: Tag, where: { tag_name: 'TagA' } } ],
+          include: [
+            { model: Tag, where: { tag_name: 'TagA' } },
+            { model: Item }
+          ],
           offset: 1,
           limit: 1
         });
