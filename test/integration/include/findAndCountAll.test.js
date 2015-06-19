@@ -180,5 +180,42 @@ describe(Support.getTestDialectTeaser('Include'), function() {
         expect(result.rows.length).to.equal(2);
       });
     });
+
+    it('should be able to include many-to-many relation with pagination (limit+offset)',function(){
+      var Project = this.sequelize.define('Project', {
+        id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
+        project_name: { type: DataTypes.STRING}
+      });
+      var Tag = this.sequelize.define('Tag', {
+        id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
+        tag_name: { type: DataTypes.STRING}
+      });
+      Project.belongsToMany(Tag, { through: 'ProjectTags' });
+      Tag.belongsToMany(Project, { through: 'ProjectTags' });
+
+      return this.sequelize.sync({force: true}).then(function() {
+        return Promise.all([Tag.create({ tag_name: 'TagA' }),
+                            Tag.create({ tag_name: 'TagB' }),
+                            Project.create({ project_name: 'ProjectA' }),
+                            Project.create({ project_name: 'ProjectB' }),
+                            Project.create({ project_name: 'ProjectC' })]);
+      }).then(function(results) {
+        var tagA = results[0];
+        var tagB = results[1];
+        var projectA = results[2];
+        var projectB = results[3];
+        var projectC = results[4];
+        return Promise.all([projectA.setTags([tagA, tagB]), projectB.setTags([tagA]), projectC.setTags([tagB])]);
+      }).then(function(){
+        return Project.findAndCountAll({
+          include: [ { model: Tag, where: { tag_name: 'TagA' } } ],
+          offset: 1,
+          limit: 1
+        });
+      }).then(function(results){
+        expect(results.rows.length).to.equal(1);
+        expect(results.count).to.equal(2);
+      });
+    });
   });
 });
