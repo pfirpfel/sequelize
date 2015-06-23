@@ -181,49 +181,105 @@ describe(Support.getTestDialectTeaser('Include'), function() {
       });
     });
 
-    it('should be able to include many-to-many relation with pagination (limit+offset) and additional include',function(){
-      var Project = this.sequelize.define('Project', {
-        id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
-        project_name: { type: DataTypes.STRING}
+    it('should be able to include many-to-many relation with pagination (limit+offset) and additional include and unusual primary key',function(){
+      var questionTypes = [
+       'OpenQuestion',
+       'ContentQuestion',
+       'MultipleChoiceQuestion',
+       'MultipleChoiceSurveyQuestion',
+       'MediaQuestion',
+       'ModularQuestion'
+      ];
+      var Question = this.sequelize.define('Question', {
+        uuid: {
+          type: DataTypes.UUID,
+          defaultValue: DataTypes.UUIDV4, // random, non-time.based,
+                                          // see: https://github.com/broofa/node-uuid
+          primaryKey: true
+        },
+        type: {
+          type: DataTypes.ENUM(questionTypes),
+          allowNull: false
+        },
+        title: {
+          type: DataTypes.STRING,
+          allowNull: false
+        },
+        difficulty: {
+          type: DataTypes.INTEGER,
+          defaultValue: 0,
+          validate: {
+            min: 0,
+            max: 3
+          }
+        },
+        questionText: {
+          type: DataTypes.TEXT
+        },
+        solutionText: {
+          type: DataTypes.TEXT
+        },
+        solutionNumber: {
+          type: DataTypes.FLOAT
+        },
+        infoText: {
+          type: DataTypes.TEXT
+        }, 
+        rateQuestion: {
+          type: DataTypes.BOOLEAN,
+          defaultValue: false
+        }
       });
-      var Item = this.sequelize.define('Item', {
-        id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
-        item_name: { type: DataTypes.STRING}
+
+      var AnswerOption = this.sequelize.define('AnswerOption', {
+        answerText: {
+          type: DataTypes.TEXT,
+          allowNull: false
+        },
+        isCorrect: {
+          type: DataTypes.BOOLEAN,
+          defaultValue: false
+        }
       });
+
       var Tag = this.sequelize.define('Tag', {
-        id: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true, autoIncrement: true },
-        tag_name: { type: DataTypes.STRING}
+        name: {
+          type: DataTypes.STRING,
+          allowNull: false,
+          unique: true
+        }
       });
-      Project.hasMany(Item);
-      Project.belongsToMany(Tag, { through: 'ProjectTags' });
-      Tag.belongsToMany(Project, { through: 'ProjectTags' });
+
+      Question.belongsToMany(Tag, { through: 'QuestionTags', foreignKey: 'question_uuid' });
+      Tag.belongsToMany(Question, { through: 'QuestionTags' });
+      Question.hasMany(AnswerOption, { onDelete: 'CASCADE' });
 
       return this.sequelize.sync({force: true}).then(function() {
-        return Promise.all([Tag.create({ tag_name: 'TagA' }),
-                            Tag.create({ tag_name: 'TagB' }),
-                            Project.create({ project_name: 'ProjectA' }),
-                            Project.create({ project_name: 'ProjectB' }),
-                            Project.create({ project_name: 'ProjectC' }),
-                            Item.create({ item_name: 'ItemA' }),
-                            Item.create({ item_name: 'ItemB' })]);
+        return Promise.all([Tag.create({ name: 'TagA' }),
+                            Tag.create({ name: 'TagB' }),
+                            Question.create({ title: 'QuestionA', type: 'OpenQuestion' }),
+                            Question.create({ title: 'QuestionB', type: 'OpenQuestion' }),
+                            Question.create({ title: 'QuestionC', type: 'OpenQuestion' }),
+                            AnswerOption.create({ answerText: 'AnswerOptionA' }),
+                            AnswerOption.create({ answerText: 'AnswerOptionB' })]);
       }).then(function(results) {
         var tagA = results[0];
         var tagB = results[1];
-        var projectA = results[2];
-        var projectB = results[3];
-        var projectC = results[4];
-        var itemA = results[5];
-        var itemB = results[6];
-        return Promise.all([projectA.setTags([tagA, tagB]),
-                            projectB.setTags([tagA]),
-                            projectC.setTags([tagB]),
-                            projectA.addItem(itemA),
-                            projectB.addItem(itemB)]);
+        var questionA = results[2];
+        var questionB = results[3];
+        var questionC = results[4];
+        var answerOptionA = results[5];
+        var answerOptionB = results[6];
+        return Promise.all([questionA.setTags([tagA, tagB]),
+                            questionB.setTags([tagA]),
+                            questionC.setTags([tagB]),
+                            questionA.addAnswerOption(answerOptionA),
+                            questionB.addAnswerOption(answerOptionB)]);
       }).then(function(){
-        return Project.findAndCountAll({
+        return Question.findAndCountAll({
           include: [
-            { model: Tag, where: { tag_name: 'TagA' } },
-            { model: Item }
+            { model: Tag, where: { name: 'TagA' } },
+            { model: AnswerOption }
           ],
           offset: 1,
           limit: 1
